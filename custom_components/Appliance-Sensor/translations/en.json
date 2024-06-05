@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Appliance Sensor",
+        "description": "Configure the Appliance Sensor.",
+        "data": {
+          "entity_id": "Entity ID",
+          "threshold": "Threshold",
+          "hysteresis_time": "Hysteresis Time"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust Appliance Sensor Options",
+        "description": "Adjust the configuration of the Appliance Sensor.",
+        "data": {
+          "entity_id": "Entity ID",
+          "threshold": "Threshold",
+          "hysteresis_time": "Hysteresis Time"
+        }
+      }
+    }
+  }
+}
