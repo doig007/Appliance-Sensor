@@ -87,7 +87,11 @@ class ApplianceSensorOptionsFlow(config_entries.OptionsFlow):
                     CONF_HYSTERESIS_TIME: hysteresis_time
                 }]
 
-                return self.async_create_entry(title="", data={"devices": devices})
+                _LOGGER.debug(f"User input: {user_input}")
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data={"devices": devices}
+                )
+                return self.async_create_entry(title="", data={})
             except Exception as e:
                 _LOGGER.error(f"Error processing options input: {e}")
                 errors["base"] = "invalid_input"

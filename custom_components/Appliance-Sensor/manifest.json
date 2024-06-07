@@ -2,7 +2,7 @@
   "domain": "appliance_sensor",
   "name": "Appliance Sensor",
   "version": "1.0",
-  "documentation": "https://doig.uk",
+  "documentation": "https://github.com/doig007/Appliance-Sensor",
   "requirements": [],
   "dependencies": [],
   "codeowners": ["@doig007"],
