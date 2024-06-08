@@ -1,0 +1,12 @@
+{
+    "name": "Appliance Sensor",
+    "description": "A custom component for Home Assistant to monitor appliance power usage and count the number of times the appliance has been turned on each day.",
+    "domain": "appliance_sensor",
+    "codeowners": ["@doig007"],
+    "documentation": "https://github.com/doig007/appliance_sensor",
+    "issue_tracker": "https://github.com/doig007/appliance_sensor/issues",
+    "requirements": [],
+    "version": "1.0.0",
+    "iot_class": "local_polling"
+  }
+  
