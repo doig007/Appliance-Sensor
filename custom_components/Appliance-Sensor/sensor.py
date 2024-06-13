@@ -26,18 +26,21 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         peak_power_sensor = ApplianceSensorPeakPower(hass, entity_id, config_entry)
         energy_consumption_sensor = ApplianceSensorEnergyConsumption(hass, entity_id, config_entry)
         runtime_sensor = ApplianceSensorRuntime(hass, entity_id, config_entry)
+        forecast_sensor = ApplianceSensorForecast(hass, entity_id, config_entry)
         
         sensors.append(appliance_sensor)
         sensors.append(counter_sensor)
         sensors.append(peak_power_sensor)
         sensors.append(energy_consumption_sensor)
         sensors.append(runtime_sensor)
+        sensors.append(forecast_sensor)
         
         # Link sensors to the appliance sensor
         appliance_sensor.set_counter_sensor(counter_sensor)
         appliance_sensor.set_peak_power_sensor(peak_power_sensor)
         appliance_sensor.set_energy_consumption_sensor(energy_consumption_sensor)
         appliance_sensor.set_runtime_sensor(runtime_sensor)
+        appliance_sensor.set_forecast_sensor(forecast_sensor)
 
     async_add_entities(sensors, update_before_add=True)
 
@@ -55,6 +58,7 @@ class ApplianceSensor(SensorEntity):
         self._peak_power_sensor = None
         self._energy_consumption_sensor = None
         self._runtime_sensor = None
+        self._forecast_sensor = None
         self._config_entry = config_entry
 
     def set_counter_sensor(self, counter_sensor):
@@ -68,6 +72,9 @@ class ApplianceSensor(SensorEntity):
 
     def set_runtime_sensor(self, runtime_sensor):
         self._runtime_sensor = runtime_sensor
+
+    def set_forecast_sensor(self, forecast_sensor):
+        self._forecast_sensor = forecast_sensor
 
     @property
     def name(self):
@@ -101,9 +108,9 @@ class ApplianceSensor(SensorEntity):
                     self._hass.async_add_job(self._energy_consumption_sensor.update_energy_consumption, power)
 
                 if power > self._threshold:
-                    self._below_threshold_since = None
                     if self._state == "off":
                         self._state = "on"
+                        self._below_threshold_since = None
                         if self._counter_sensor:
                             self._hass.async_add_job(self._counter_sensor.increment_count)
                         if self._runtime_sensor:
@@ -116,10 +123,11 @@ class ApplianceSensor(SensorEntity):
                             elapsed = current_time - self._below_threshold_since
                             if elapsed >= self._hysteresis_time:
                                 self._state = "off"
+                                self._below_threshold_since = None
                                 if self._runtime_sensor:
                                     self._hass.async_add_job(self._runtime_sensor.stop_timer)
                     else:
-                        self._state = "off"
+                        self._below_threshold_since = None
             except ValueError:
                 _LOGGER.error("Unable to convert state to float: %s", state.state)
                 self._state = "unknown"
@@ -293,4 +301,55 @@ class ApplianceSensorRuntime(SensorEntity):
     @callback
     def _reset_runtime(self, time):
         self._runtime = timedelta()
+        self._hass.async_add_job(self.async_write_ha_state)
+
+class ApplianceSensorForecast(SensorEntity):
+
+    def __init__(self, hass, entity_id, config_entry):
+        self._hass = hass
+        self._entity_id = entity_id
+        self._forecast = 0
+        self._config_entry = config_entry
+        self._reset_at_midnight()
+
+    @property
+    def name(self):
+        return f"Appliance Sensor Forecast {self._entity_id}"
+
+    @property
+    def state(self):
+        return self._forecast
+
+    @property
+    def unique_id(self):
+        return f"{self._config_entry.entry_id}_{self._entity_id}_forecast"
+
+    @property
+    def should_poll(self):
+        return False
+
+    def update(self):
+        self._hass.async_add_job(self._calculate_forecast)
+
+    def _calculate_forecast(self):
+        # This is a simplified forecasting logic. Replace with your own forecasting method.
+        past_counts = self._get_historical_counts()
+        if past_counts:
+            self._forecast = int(np.mean(past_counts))
+        self.async_write_ha_state()
+
+    def _get_historical_counts(self):
+        # Retrieve historical data from Home Assistant
+        start_time = datetime.now() - timedelta(days=30)
+        end_time = datetime.now()
+        history = self._hass.history.state_changes_during_period(start_time, end_time, entity_id=self._entity_id)
+        counts = [state.state for state in history[self._entity_id] if state.state.isdigit()]
+        return list(map(int, counts))
+
+    def _reset_at_midnight(self):
+        async_track_time_change(self._hass, self._reset_forecast, hour=0, minute=0, second=0)
+
+    @callback
+    def _reset_forecast(self, time):
+        self._forecast = 0
         self._hass.async_add_job(self.async_write_ha_state)
