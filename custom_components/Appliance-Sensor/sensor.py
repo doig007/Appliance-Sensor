@@ -142,6 +142,7 @@ class ApplianceSensorOnCounter(SensorEntity):
         self._count = 0
         self._config_entry = config_entry
         self._reset_at_midnight()
+        _LOGGER.debug(f"Initialized ApplianceSensorOnCounter for {entity_id}")
 
     @property
     def name(self):
@@ -161,16 +162,20 @@ class ApplianceSensorOnCounter(SensorEntity):
 
     @callback
     def increment_count(self):
+        _LOGGER.debug(f"Incrementing count for {self._entity_id}")
         self._count += 1
         self._hass.async_add_job(self.async_write_ha_state)
 
     def _reset_at_midnight(self):
+        _LOGGER.debug(f"Setting up midnight reset for {self._entity_id}")
         async_track_time_change(self._hass, self._reset_counter, hour=0, minute=0, second=0)
 
     @callback
     def _reset_counter(self, time):
+        _LOGGER.debug(f"Resetting count to 0 for {self._entity_id} at midnight")
         self._count = 0
         self._hass.async_add_job(self.async_write_ha_state)
+
 
 class ApplianceSensorPeakPower(SensorEntity):
 
@@ -353,3 +358,4 @@ class ApplianceSensorForecast(SensorEntity):
     def _reset_forecast(self, time):
         self._forecast = 0
         self._hass.async_add_job(self.async_write_ha_state)
+
