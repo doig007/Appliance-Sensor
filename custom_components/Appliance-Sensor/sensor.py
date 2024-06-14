@@ -6,7 +6,7 @@ from homeassistant.const import CONF_ENTITY_ID, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.const import UnitOfEnergy
-from homeassistant.components.history import get_significant_states
+from homeassistant.components.recorder.history import get_state_changes_during_period
 
 from .const import CONF_THRESHOLD, CONF_HYSTERESIS_TIME
 
@@ -345,7 +345,7 @@ class ApplianceSensorForecast(SensorEntity):
 
     def _calculate_forecast(self):
         # This is a simplified forecasting logic. Replace with your own forecasting method.
-        past_counts = self._get_historical_counts()
+        past_counts = self._hass.async_add_executor_job(self._get_historical_counts)
         if past_counts:
             self._forecast = int(np.mean(past_counts))
         self.async_write_ha_state()
@@ -354,8 +354,8 @@ class ApplianceSensorForecast(SensorEntity):
         # Retrieve historical data from Home Assistant
         start_time = datetime.now() - timedelta(days=30)
         end_time = datetime.now()
-        history = get_significant_states(self._hass, start_time, end_time, entity_ids=[self._entity_id])
-        counts = [state.state for state in history.get(self._entity_id, []) if state.state.isdigit()]
+        history = get_state_changes_during_period(self._hass, start_time, end_time, entity_id=self._entity_id)
+        counts = [state.state for state in history[self._entity_id] if state.state.isdigit()]
         return list(map(int, counts))
 
     def _reset_at_midnight(self):
