@@ -6,8 +6,7 @@ from homeassistant.const import CONF_ENTITY_ID, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.const import UnitOfEnergy
-from homeassistant.helpers.integration_platform import async_process_integration_platforms
-from homeassistant.helpers import entity_registry as er
+from homeassistant.components.history import get_significant_states
 
 from .const import CONF_THRESHOLD, CONF_HYSTERESIS_TIME
 
@@ -101,6 +100,7 @@ class ApplianceSensor(SensorEntity):
             try:
                 power = float(state.state)
                 self._current_power = power
+                _LOGGER.debug(f"Power for {self._entity_id}: {power}")
                 current_time = datetime.now()
 
                 if self._peak_power_sensor:
@@ -111,6 +111,7 @@ class ApplianceSensor(SensorEntity):
 
                 if power > self._threshold:
                     if self._state == "off":
+                        _LOGGER.debug(f"Power above threshold for {self._entity_id}: Turning ON")
                         self._state = "on"
                         self._below_threshold_since = None
                         if self._counter_sensor:
@@ -124,6 +125,7 @@ class ApplianceSensor(SensorEntity):
                         else:
                             elapsed = current_time - self._below_threshold_since
                             if elapsed >= self._hysteresis_time:
+                                _LOGGER.debug(f"Power below threshold for {self._entity_id} for hysteresis time: Turning OFF")
                                 self._state = "off"
                                 self._below_threshold_since = None
                                 if self._runtime_sensor:
@@ -131,9 +133,10 @@ class ApplianceSensor(SensorEntity):
                     else:
                         self._below_threshold_since = None
             except ValueError:
-                _LOGGER.error("Unable to convert state to float: %s", state.state)
+                _LOGGER.error(f"Unable to convert state to float: {state.state} for {self._entity_id}")
                 self._state = "unknown"
         else:
+            _LOGGER.debug(f"State unknown or not available for {self._entity_id}")
             self._state = "unknown"
 
 class ApplianceSensorOnCounter(SensorEntity):
@@ -205,15 +208,18 @@ class ApplianceSensorPeakPower(SensorEntity):
 
     @callback
     def update_peak_power(self, power):
+        _LOGGER.debug(f"Updating peak power for {self._entity_id} with power: {power}")
         if power > self._peak_power:
             self._peak_power = power
             self._hass.async_add_job(self.async_write_ha_state)
 
     def _reset_at_midnight(self):
+        _LOGGER.debug(f"Setting up midnight reset for peak power of {self._entity_id}")
         async_track_time_change(self._hass, self._reset_peak_power, hour=0, minute=0, second=0)
 
     @callback
     def _reset_peak_power(self, time):
+        _LOGGER.debug(f"Resetting peak power to 0 for {self._entity_id} at midnight")
         self._peak_power = 0.0
         self._hass.async_add_job(self.async_write_ha_state)
 
@@ -339,18 +345,17 @@ class ApplianceSensorForecast(SensorEntity):
 
     def _calculate_forecast(self):
         # This is a simplified forecasting logic. Replace with your own forecasting method.
-        past_counts = self._hass.async_add_executor_job(self._get_historical_counts)
+        past_counts = self._get_historical_counts()
         if past_counts:
             self._forecast = int(np.mean(past_counts))
         self.async_write_ha_state()
 
     def _get_historical_counts(self):
         # Retrieve historical data from Home Assistant
-        from homeassistant.components.history import get_significant_states
         start_time = datetime.now() - timedelta(days=30)
         end_time = datetime.now()
         history = get_significant_states(self._hass, start_time, end_time, entity_ids=[self._entity_id])
-        counts = [state.state for state in history[self._entity_id] if state.state.isdigit()]
+        counts = [state.state for state in history.get(self._entity_id, []) if state.state.isdigit()]
         return list(map(int, counts))
 
     def _reset_at_midnight(self):
