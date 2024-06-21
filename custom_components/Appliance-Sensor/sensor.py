@@ -12,13 +12,13 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
     _LOGGER.debug("Setting up sensors for Appliance Sensor integration")
-    devices = config_entry.data["devices"]
+    devices = config_entry.data.get("devices", [])
 
     sensors = []
     for device in devices:
-        entity_id = device[CONF_ENTITY_ID]
-        threshold = device[CONF_THRESHOLD]
-        hysteresis_time = timedelta(seconds=device[CONF_HYSTERESIS_TIME])
+        entity_id = device.get(CONF_ENTITY_ID)
+        threshold = device.get(CONF_THRESHOLD)
+        hysteresis_time = timedelta(seconds=device.get(CONF_HYSTERESIS_TIME))
         
         appliance_sensor = ApplianceSensor(hass, entity_id, threshold, hysteresis_time, config_entry)
         counter_sensor = ApplianceSensorOnCounter(hass, entity_id, config_entry)
@@ -26,7 +26,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         sensors.append(appliance_sensor)
         sensors.append(counter_sensor)
         
-        # Link sensors to the appliance sensor
         appliance_sensor.set_counter_sensor(counter_sensor)
 
     async_add_entities(sensors, update_before_add=True)
@@ -69,35 +68,41 @@ class ApplianceSensor(SensorEntity):
     def update(self):
         _LOGGER.debug(f"Updating sensor {self._entity_id}")
         state = self._hass.states.get(self._entity_id)
-        if state and state.state != STATE_UNKNOWN:
-            try:
-                power = float(state.state)
-                self._current_power = power
-                _LOGGER.debug(f"Power for {self._entity_id}: {power}")
-                current_time = datetime.now()
+        if state is None:
+            _LOGGER.error(f"Entity {self._entity_id} not found in Home Assistant states.")
+            self._state = "unknown"
+            return
 
-                if power > self._threshold:
-                    if self._state == "off":
-                        _LOGGER.debug(f"Power above threshold for {self._entity_id}: Turning ON")
-                        self._state = "on"
-                        self._below_threshold_since = None
-                        if self._counter_sensor:
-                            self._hass.async_add_job(self._counter_sensor.increment_count)
-                else:
-                    if self._state == "on":
-                        if self._below_threshold_since is None:
-                            self._below_threshold_since = current_time
-                        else:
-                            elapsed = current_time - self._below_threshold_since
-                            if elapsed >= self._hysteresis_time:
-                                _LOGGER.debug(f"Power below threshold for {self._entity_id} for hysteresis time: Turning OFF")
-                                self._state = "off"
-                                self._below_threshold_since = None
-            except ValueError:
-                _LOGGER.error(f"Unable to convert state to float: {state.state} for {self._entity_id}")
-                self._state = "unknown"
-        else:
-            _LOGGER.debug(f"State unknown or not available for {self._entity_id}")
+        if state.state == STATE_UNKNOWN:
+            _LOGGER.warning(f"State of entity {self._entity_id} is unknown.")
+            self._state = "unknown"
+            return
+
+        try:
+            power = float(state.state)
+            self._current_power = power
+            _LOGGER.debug(f"Power for {self._entity_id}: {power}")
+            current_time = datetime.now()
+
+            if power > self._threshold:
+                if self._state == "off":
+                    _LOGGER.debug(f"Power above threshold for {self._entity_id}: Turning ON")
+                    self._state = "on"
+                    self._below_threshold_since = None
+                    if self._counter_sensor:
+                        self._hass.async_add_job(self._counter_sensor.increment_count)
+            else:
+                if self._state == "on":
+                    if self._below_threshold_since is None:
+                        self._below_threshold_since = current_time
+                    else:
+                        elapsed = current_time - self._below_threshold_since
+                        if elapsed >= self._hysteresis_time:
+                            _LOGGER.debug(f"Power below threshold for {self._entity_id} for hysteresis time: Turning OFF")
+                            self._state = "off"
+                            self._below_threshold_since = None
+        except ValueError:
+            _LOGGER.error(f"Unable to convert state to float: {state.state} for {self._entity_id}")
             self._state = "unknown"
 
 class ApplianceSensorOnCounter(SensorEntity):
