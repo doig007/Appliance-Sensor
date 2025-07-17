@@ -73,8 +73,8 @@ class ApplianceSensor(SensorEntity):
             self._state = "unknown"
             return
 
-        if state.state == STATE_UNKNOWN:
-            _LOGGER.warning(f"State of entity {self._entity_id} is unknown.")
+        if state.state == STATE_UNKNOWN or state.state == "unavailable":
+            _LOGGER.warning(f"State of entity {self._entity_id} is {state.state}.")
             self._state = "unknown"
             return
 
